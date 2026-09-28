@@ -2,12 +2,16 @@
 
 #TO DO: Maybe let you search a director and get a spreadsheet of all their movies in this format
 # Maybe add a GUI so I can just upload a file instead of having something named movies.txt
+# I think maybe instead of country we orient it around spoken language
 
 import os
 import sys
 import time
 import requests
 import xlsxwriter
+from dotenv import load_dotenv
+
+load_dotenv()
 
 # ============================================================
 # CONFIGURATION
@@ -15,7 +19,7 @@ import xlsxwriter
 
 # Put your TMDB API Read Access Token here, or set it as
 # an environment variable called TMDB_TOKEN.
-TMDB_TOKEN = os.getenv("TMDB_TOKEN", "eyJhbGciOiJIUzI1NiJ9.eyJhdWQiOiIyZWVhM2I0Y2FkYzZhYTlhZTYwYTg4N2M3ZmM3YzNiMCIsIm5iZiI6MTc5MDU1OTg3Ny44MzM5OTk5LCJzdWIiOiI2YWI5YzY4NWI1YjQ1NDQ3NTQxYjZmOTAiLCJzY29wZXMiOlsiYXBpX3JlYWQiXSwidmVyc2lvbiI6MX0.YmcDw8BwV8fuaKEvaIxuSIY5Z9MsjxoENmYpM5Usi94")
+TMDB_TOKEN = os.getenv("TMDB_TOKEN")
 
 BASE_URL = "https://api.themoviedb.org/3"
 
@@ -26,7 +30,6 @@ OUTPUT_FILE = "movies.xlsx"
 # Language used for TMDB results
 LANGUAGE = "en-US"
 
-
 # ============================================================
 # TMDB API
 # ============================================================
@@ -35,7 +38,6 @@ HEADERS = {
     "Authorization": f"Bearer {TMDB_TOKEN}",
     "accept": "application/json"
 }
-
 
 def search_movie(title, year):
     """
