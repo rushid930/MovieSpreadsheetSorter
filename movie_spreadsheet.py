@@ -3,15 +3,11 @@
 # Need to take in title and then year (which will be seperated by a space)
 # Once I get this data it needs to look through TMBD pull out the director, title, year, country, and genres
 
-# TO DO: Make it so we split the genres all into their own column and have a checkbox of which they are checked off
-# Have the directors name be reversed so "Last Name, First Name"
-# Maybe have a GUI so I don't need to name the file movies
-
 import os
 import sys
 import time
 import requests
-import pandas as pd
+import xlsxwriter
 
 # ============================================================
 # CONFIGURATION
@@ -186,16 +182,19 @@ def get_countries(details):
 
 def get_genres(details):
     """
-    Extract movie genres.
+    Extract movie genres as a list.
+
+    Example:
+        ["Action", "Science Fiction"]
     """
 
     genres = details.get("genres", [])
 
-    return ", ".join(
-        genre.get("name", "")
+    return [
+        genre.get("name", "").strip()
         for genre in genres
         if genre.get("name")
-    )
+    ]
 
 
 # ============================================================
@@ -287,6 +286,12 @@ def process_movies(movies):
 
     rows = []
 
+    # Keep track of every genre encountered.
+    # A set prevents duplicates, while the list preserves
+    # the order in which genres were first encountered.
+    all_genres = []
+    genre_set = set()
+
     total = len(movies)
 
     for index, movie in enumerate(movies, start=1):
@@ -315,7 +320,8 @@ def process_movies(movies):
                     "Title": input_title,
                     "Year": input_year,
                     "Country": "",
-                    "Genres": ""
+                    "Genres": [],
+                    "_genres": []
                 })
 
                 continue
@@ -346,12 +352,20 @@ def process_movies(movies):
             countries = get_countries(details)
             genres = get_genres(details)
 
+            # Add any newly encountered genres
+            for genre in genres:
+
+                if genre not in genre_set:
+                    genre_set.add(genre)
+                    all_genres.append(genre)
+
             rows.append({
                 "Director": director,
                 "Title": title,
                 "Year": year,
                 "Country": countries,
-                "Genres": genres
+                "Genres": genres,
+                "_genres": genres
             })
 
             print(
@@ -359,7 +373,7 @@ def process_movies(movies):
                 f"{title} | "
                 f"{year} | "
                 f"{countries} | "
-                f"{genres}"
+                f"{', '.join(genres)}"
             )
 
         except requests.exceptions.HTTPError as e:
@@ -371,7 +385,8 @@ def process_movies(movies):
                 "Title": input_title,
                 "Year": input_year,
                 "Country": "",
-                "Genres": ""
+                "Genres": [],
+                "_genres": []
             })
 
         except requests.exceptions.RequestException as e:
@@ -383,7 +398,8 @@ def process_movies(movies):
                 "Title": input_title,
                 "Year": input_year,
                 "Country": "",
-                "Genres": ""
+                "Genres": [],
+                "_genres": []
             })
 
         except Exception as e:
@@ -395,59 +411,233 @@ def process_movies(movies):
                 "Title": input_title,
                 "Year": input_year,
                 "Country": "",
-                "Genres": ""
+                "Genres": [],
+                "_genres": []
             })
 
         # Small delay between requests
         time.sleep(0.25)
 
-    return rows
+    return rows, all_genres
 
 
 # ============================================================
 # WRITE EXCEL
 # ============================================================
 
-def save_to_excel(rows, filename):
+def save_to_excel(rows, all_genres, filename):
+    # --------------------------------------------------------
+    # Create workbook
+    # --------------------------------------------------------
+    workbook = xlsxwriter.Workbook(filename)
 
-    df = pd.DataFrame(
-        rows,
-        columns=[
-            "Director",
-            "Title",
-            "Year",
-            "Country",
-            "Genres"
-        ]
-    )
+    worksheet = workbook.add_worksheet("Movies")
 
-    # Create Excel file
-    with pd.ExcelWriter(
-        filename,
-        engine="openpyxl"
-    ) as writer:
+    # --------------------------------------------------------
+    # FORMATS
+    # --------------------------------------------------------
 
-        df.to_excel(
-            writer,
-            index=False,
-            sheet_name="Movies"
+    header_format = workbook.add_format({
+        "bold": True,
+        "bg_color": "#D9EAF7",
+        "border": 1,
+        "align": "center",
+        "valign": "vcenter"
+    })
+
+    cell_format = workbook.add_format({
+        "border": 1,
+        "valign": "vcenter"
+    })
+
+    year_format = workbook.add_format({
+        "border": 1,
+        "align": "center"
+    })
+
+    # --------------------------------------------------------
+    # FIXED COLUMNS
+    # --------------------------------------------------------
+
+    fixed_columns = [
+        "Director",
+        "Title",
+        "Year",
+        "Country",
+        "Genres"
+    ]
+
+    # Write fixed column headers
+    for col, column_name in enumerate(fixed_columns):
+
+        worksheet.write(
+            0,
+            col,
+            column_name,
+            header_format
         )
 
-        worksheet = writer.sheets["Movies"]
+    # --------------------------------------------------------
+    # GENRE COLUMNS
+    # --------------------------------------------------------
 
-        # Freeze header row
-        worksheet.freeze_panes = "A2"
+    genre_start_col = len(fixed_columns)
 
-        # Make columns readable
-        worksheet.column_dimensions["A"].width = 35
-        worksheet.column_dimensions["B"].width = 40
-        worksheet.column_dimensions["C"].width = 10
-        worksheet.column_dimensions["D"].width = 30
-        worksheet.column_dimensions["E"].width = 40
+    for genre_index, genre in enumerate(all_genres):
 
-        # Enable Excel filters
-        worksheet.auto_filter.ref = worksheet.dimensions
+        col = genre_start_col + genre_index
 
+        # Header = genre name
+        worksheet.write(
+            0,
+            col,
+            genre,
+            header_format
+        )
+
+    # --------------------------------------------------------
+    # WRITE MOVIE ROWS
+    # --------------------------------------------------------
+
+    for row_index, movie in enumerate(rows, start=1):
+
+        # --------------------------------------------
+        # Director
+        # --------------------------------------------
+        
+        worksheet.write(
+            row_index,
+            0,
+            movie["Director"],
+            cell_format
+        )
+
+        # --------------------------------------------
+        # Title
+        # --------------------------------------------
+
+        worksheet.write(
+            row_index,
+            1,
+            movie["Title"],
+            cell_format
+        )
+
+        # --------------------------------------------
+        # Year
+        # --------------------------------------------
+
+        worksheet.write(
+            row_index,
+            2,
+            movie["Year"],
+            year_format
+        )
+
+        # --------------------------------------------
+        # Country
+        # --------------------------------------------
+
+        worksheet.write(
+            row_index,
+            3,
+            movie["Country"],
+            cell_format
+        )
+
+        # --------------------------------------------
+        # Genres
+        # --------------------------------------------
+
+        worksheet.write(
+            row_index,
+            4,
+            ", ".join(movie["_genres"]),
+            cell_format
+        )
+
+        # ----------------------------------------------------
+        # GENRE CHECKBOXES
+        # ----------------------------------------------------
+
+        movie_genres = set(movie["_genres"])
+
+        for genre_index, genre in enumerate(all_genres):
+
+            col = genre_start_col + genre_index
+
+            # TRUE if this movie has the genre
+            has_genre = genre in movie_genres
+
+            # XlsxWriter checkbox
+            worksheet.insert_checkbox(
+                row_index,
+                col,
+                has_genre
+            )
+
+    # --------------------------------------------------------
+    # COLUMN WIDTHS
+    # --------------------------------------------------------
+
+    worksheet.set_column(
+        "A:A",
+        35
+    )
+
+    worksheet.set_column(
+        "B:B",
+        40
+    )
+
+    worksheet.set_column(
+        "C:C",
+        10
+    )
+
+    worksheet.set_column(
+        "D:D",
+        30
+    )
+
+    worksheet.set_column(
+        "E:E",
+        40
+    )
+
+    # Genre columns
+    if all_genres:
+
+        worksheet.set_column(
+            genre_start_col,
+            genre_start_col + len(all_genres) - 1,
+            15
+        )
+
+    # --------------------------------------------------------
+    # SHEET SETTINGS
+    # --------------------------------------------------------
+
+    # Freeze header row
+    worksheet.freeze_panes(1, 0)
+
+    # Autofilter
+    last_col = genre_start_col + len(all_genres) - 1
+
+    if last_col >= 0:
+
+        worksheet.autofilter(
+            0,
+            0,
+            len(rows),
+            last_col
+        )
+
+    # Make the header row taller
+    worksheet.set_row(0, 25)
+
+    # Close workbook
+    workbook.close()
 
 # ============================================================
 # MAIN
@@ -495,10 +685,14 @@ def main():
     )
 
     # Process
-    rows = process_movies(movies)
+    rows, all_genres = process_movies(movies)
 
     # Save
-    save_to_excel(rows, OUTPUT_FILE)
+    save_to_excel(
+        rows,
+        all_genres,
+        OUTPUT_FILE
+    )
 
     print(
         f"\nDone!"
