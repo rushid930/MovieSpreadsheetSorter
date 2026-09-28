@@ -4,3 +4,463 @@
 # Once I get this data it needs to look through TMBD or Letterboxd and pull out the director, title, year, country, and genres
 # TMDB has a public API
 # If there's multiple in the same year just have it select the most viewed
+
+import os
+import sys
+import time
+import requests
+import pandas as pd
+
+# ============================================================
+# CONFIGURATION
+# ============================================================
+
+# Put your TMDB API Read Access Token here, or set it as
+# an environment variable called TMDB_TOKEN.
+TMDB_TOKEN = os.getenv("TMDB_TOKEN", "eyJhbGciOiJIUzI1NiJ9.eyJhdWQiOiIyZWVhM2I0Y2FkYzZhYTlhZTYwYTg4N2M3ZmM3YzNiMCIsIm5iZiI6MTc5MDU1OTg3Ny44MzM5OTk5LCJzdWIiOiI2YWI5YzY4NWI1YjQ1NDQ3NTQxYjZmOTAiLCJzY29wZXMiOlsiYXBpX3JlYWQiXSwidmVyc2lvbiI6MX0.YmcDw8BwV8fuaKEvaIxuSIY5Z9MsjxoENmYpM5Usi94")
+
+BASE_URL = "https://api.themoviedb.org/3"
+
+# Files
+INPUT_FILE = "movies.txt"
+OUTPUT_FILE = "movies.xlsx"
+
+# Language used for TMDB results
+LANGUAGE = "en-US"
+
+
+# ============================================================
+# TMDB API
+# ============================================================
+
+HEADERS = {
+    "Authorization": f"Bearer {TMDB_TOKEN}",
+    "accept": "application/json"
+}
+
+
+def search_movie(title, year):
+    """
+    Search TMDB for a movie using its title and release year.
+
+    Returns the best matching TMDB movie result, or None.
+    """
+
+    url = f"{BASE_URL}/search/movie"
+
+    params = {
+        "query": title,
+        "year": year,
+        "language": LANGUAGE,
+        "include_adult": "false"
+    }
+
+    response = requests.get(
+        url,
+        headers=HEADERS,
+        params=params,
+        timeout=30
+    )
+
+    response.raise_for_status()
+
+    results = response.json().get("results", [])
+
+    if not results:
+        return None
+
+    # Prefer an exact title/year match where possible.
+    normalized_title = title.strip().lower()
+
+    exact_matches = []
+
+    for movie in results:
+        movie_title = movie.get("title", "").strip().lower()
+        release_date = movie.get("release_date", "")
+
+        if (
+            movie_title == normalized_title
+            and release_date.startswith(str(year))
+        ):
+            exact_matches.append(movie)
+
+    if exact_matches:
+        return exact_matches[0]
+
+    # Otherwise use TMDB's first search result.
+    return results[0]
+
+
+def get_movie_details(movie_id):
+    """
+    Get detailed movie information and credits in one request.
+    """
+
+    url = f"{BASE_URL}/movie/{movie_id}"
+
+    params = {
+        "language": LANGUAGE,
+        "append_to_response": "credits"
+    }
+
+    response = requests.get(
+        url,
+        headers=HEADERS,
+        params=params,
+        timeout=30
+    )
+
+    response.raise_for_status()
+
+    return response.json()
+
+
+# ============================================================
+# DIRECTOR
+# ============================================================
+
+def get_director(details):
+    """
+    Extract the director(s) from the movie credits.
+    """
+
+    crew = details.get("credits", {}).get("crew", [])
+
+    directors = [
+        person["name"]
+        for person in crew
+        if person.get("job") == "Director"
+    ]
+
+    return ", ".join(directors)
+
+
+# ============================================================
+# COUNTRY
+# ============================================================
+
+def get_countries(details):
+    """
+    Extract production countries.
+    """
+
+    countries = details.get("production_countries", [])
+
+    return ", ".join(
+        country.get("name", "")
+        for country in countries
+        if country.get("name")
+    )
+
+
+# ============================================================
+# GENRES
+# ============================================================
+
+def get_genres(details):
+    """
+    Extract movie genres.
+    """
+
+    genres = details.get("genres", [])
+
+    return ", ".join(
+        genre.get("name", "")
+        for genre in genres
+        if genre.get("name")
+    )
+
+
+# ============================================================
+# READ TXT FILE
+# ============================================================
+
+def read_movies(filename):
+    """
+    Read movies from the TXT file.
+
+    Expected format:
+
+        Movie Title | 2020
+        Another Movie | 1998
+    """
+
+    movies = []
+
+    with open(filename, "r", encoding="utf-8") as file:
+
+        for line_number, line in enumerate(file, start=1):
+
+            line = line.strip()
+
+            # Ignore empty lines
+            if not line:
+                continue
+
+            # Ignore comments
+            if line.startswith("#"):
+                continue
+
+            # Expected separator: |
+            if "|" not in line:
+                print(
+                    f"WARNING: Line {line_number} skipped "
+                    f"(expected: Title | Year)"
+                )
+                continue
+
+            title, year = line.rsplit("|", 1)
+
+            title = title.strip()
+            year = year.strip()
+
+            try:
+                year = int(year)
+            except ValueError:
+                print(
+                    f"WARNING: Line {line_number} skipped "
+                    f"(invalid year: {year})"
+                )
+                continue
+
+            movies.append({
+                "input_title": title,
+                "input_year": year
+            })
+
+    return movies
+
+
+# ============================================================
+# PROCESS MOVIES
+# ============================================================
+
+def process_movies(movies):
+
+    rows = []
+
+    total = len(movies)
+
+    for index, movie in enumerate(movies, start=1):
+
+        input_title = movie["input_title"]
+        input_year = movie["input_year"]
+
+        print(
+            f"[{index}/{total}] Searching: "
+            f"{input_title} ({input_year})"
+        )
+
+        try:
+
+            # Search TMDB
+            search_result = search_movie(
+                input_title,
+                input_year
+            )
+
+            if search_result is None:
+
+                print("    -> NOT FOUND")
+
+                rows.append({
+                    "Title": input_title,
+                    "Year": input_year,
+                    "Director": "",
+                    "Country": "",
+                    "Genres": ""
+                })
+
+                continue
+
+            movie_id = search_result["id"]
+
+            # Retrieve complete details
+            details = get_movie_details(movie_id)
+
+            # Use the actual TMDB title/year
+            title = details.get(
+                "title",
+                input_title
+            )
+
+            release_date = details.get(
+                "release_date",
+                ""
+            )
+
+            year = (
+                release_date[:4]
+                if release_date
+                else input_year
+            )
+
+            director = get_director(details)
+            countries = get_countries(details)
+            genres = get_genres(details)
+
+            rows.append({
+                "Title": title,
+                "Year": year,
+                "Director": director,
+                "Country": countries,
+                "Genres": genres
+            })
+
+            print(
+                f"    -> {title} | "
+                f"{year} | "
+                f"{director} | "
+                f"{countries} | "
+                f"{genres}"
+            )
+
+        except requests.exceptions.HTTPError as e:
+
+            print(f"    -> HTTP ERROR: {e}")
+
+            rows.append({
+                "Title": input_title,
+                "Year": input_year,
+                "Director": "",
+                "Country": "",
+                "Genres": ""
+            })
+
+        except requests.exceptions.RequestException as e:
+
+            print(f"    -> REQUEST ERROR: {e}")
+
+            rows.append({
+                "Title": input_title,
+                "Year": input_year,
+                "Director": "",
+                "Country": "",
+                "Genres": ""
+            })
+
+        except Exception as e:
+
+            print(f"    -> ERROR: {e}")
+
+            rows.append({
+                "Title": input_title,
+                "Year": input_year,
+                "Director": "",
+                "Country": "",
+                "Genres": ""
+            })
+
+        # Small delay between requests
+        time.sleep(0.25)
+
+    return rows
+
+
+# ============================================================
+# WRITE EXCEL
+# ============================================================
+
+def save_to_excel(rows, filename):
+
+    df = pd.DataFrame(
+        rows,
+        columns=[
+            "Title",
+            "Year",
+            "Director",
+            "Country",
+            "Genres"
+        ]
+    )
+
+    # Create Excel file
+    with pd.ExcelWriter(
+        filename,
+        engine="openpyxl"
+    ) as writer:
+
+        df.to_excel(
+            writer,
+            index=False,
+            sheet_name="Movies"
+        )
+
+        worksheet = writer.sheets["Movies"]
+
+        # Freeze header row
+        worksheet.freeze_panes = "A2"
+
+        # Make columns readable
+        worksheet.column_dimensions["A"].width = 40
+        worksheet.column_dimensions["B"].width = 10
+        worksheet.column_dimensions["C"].width = 35
+        worksheet.column_dimensions["D"].width = 30
+        worksheet.column_dimensions["E"].width = 40
+
+        # Enable Excel filters
+        worksheet.auto_filter.ref = worksheet.dimensions
+
+
+# ============================================================
+# MAIN
+# ============================================================
+
+def main():
+
+    # Check API token
+    if (
+        not TMDB_TOKEN
+        or TMDB_TOKEN == "YOUR_TMDB_BEARER_TOKEN"
+    ):
+        print(
+            "ERROR: Please enter your TMDB API Read Access Token."
+        )
+        print(
+            "Either edit TMDB_TOKEN in this script or set "
+            "the TMDB_TOKEN environment variable."
+        )
+        sys.exit(1)
+
+    # Check input file
+    if not os.path.exists(INPUT_FILE):
+
+        print(
+            f"ERROR: Could not find '{INPUT_FILE}'."
+        )
+
+        print(
+            "Create a TXT file with one movie per line, "
+            "using: Movie Title | Year"
+        )
+
+        sys.exit(1)
+
+    # Read movies
+    movies = read_movies(INPUT_FILE)
+
+    if not movies:
+        print("ERROR: No valid movies found in the input file.")
+        sys.exit(1)
+
+    print(
+        f"\nFound {len(movies)} movies.\n"
+    )
+
+    # Process
+    rows = process_movies(movies)
+
+    # Save
+    save_to_excel(rows, OUTPUT_FILE)
+
+    print(
+        f"\nDone!"
+    )
+
+    print(
+        f"Excel file created: {OUTPUT_FILE}"
+    )
+
+
+if __name__ == "__main__":
+    main()
