@@ -1,10 +1,7 @@
 # Simple program where I can input several movie titles and years and get an Excel Spreedsheet output of more detailed information
-# Need to input a txt file and output an excel file
-# Need to take in title and then year (which will be seperated by a space)
-# Once I get this data it needs to look through TMBD pull out the director, title, year, country, and genres
 
-#TO DO: Maybe add the letterboxd rating too
-# Maybe let you search a director and get a spreadsheet of all their movies in this format
+#TO DO: Maybe let you search a director and get a spreadsheet of all their movies in this format
+# Maybe add a GUI so I can just upload a file instead of having something named movies.txt
 
 import os
 import sys
