@@ -180,9 +180,12 @@ def read_movies(filename):
     Read movies from the TXT file.
 
     Expected format:
+        Movie Title 2020
+        Another Movie 1998
 
-        Movie Title | 2020
-        Another Movie | 1998
+    The last 4 digits of each line are treated as the
+    movie's release year. Everything before the year
+    is treated as the movie title.
     """
 
     movies = []
@@ -201,25 +204,43 @@ def read_movies(filename):
             if line.startswith("#"):
                 continue
 
-            # Expected separator: |
-            if "|" not in line:
+            # Make sure the line has at least 4 characters
+            if len(line) < 4:
                 print(
                     f"WARNING: Line {line_number} skipped "
-                    f"(expected: Title | Year)"
+                    f"(could not find a 4-digit year)"
                 )
                 continue
 
-            title, year = line.rsplit("|", 1)
+            # Take the last 4 characters as the year
+            year_text = line[-4:]
 
-            title = title.strip()
-            year = year.strip()
+            # Everything before the year is the movie title
+            title = line[:-4].strip()
 
-            try:
-                year = int(year)
-            except ValueError:
+            # Make sure the last 4 characters are actually numbers
+            if not year_text.isdigit():
+                print(
+                    f"WARNING: Line {line_number} skipped "
+                    f"(last 4 characters are not a year: {year_text})"
+                )
+                continue
+
+            year = int(year_text)
+
+            # Basic validation for a movie release year
+            if year < 1800 or year > 2100:
                 print(
                     f"WARNING: Line {line_number} skipped "
                     f"(invalid year: {year})"
+                )
+                continue
+
+            # Make sure there is a title
+            if not title:
+                print(
+                    f"WARNING: Line {line_number} skipped "
+                    f"(movie title is missing)"
                 )
                 continue
 
