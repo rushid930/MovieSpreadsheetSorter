@@ -6,7 +6,6 @@
 # TO DO: Make it so we split the genres all into their own column and have a checkbox of which they are checked off
 # Have the directors name be reversed so "Last Name, First Name"
 # Maybe have a GUI so I don't need to name the file movies
-# Make sure the column width is good
 
 import os
 import sys
@@ -125,15 +124,40 @@ def get_movie_details(movie_id):
 def get_director(details):
     """
     Extract the director(s) from the movie credits.
+
+    Converts names from:
+        Christopher Nolan
+
+    To:
+        Nolan, Christopher
     """
 
     crew = details.get("credits", {}).get("crew", [])
 
-    directors = [
-        person["name"]
-        for person in crew
-        if person.get("job") == "Director"
-    ]
+    directors = []
+
+    for person in crew:
+        if person.get("job") == "Director":
+
+            name = person.get("name", "").strip()
+
+            if not name:
+                continue
+
+            # Split the name into individual parts
+            name_parts = name.split()
+
+            if len(name_parts) >= 2:
+                # Last name goes first
+                formatted_name = (
+                    f"{name_parts[-1]}, "
+                    f"{' '.join(name_parts[:-1])}"
+                )
+            else:
+                # If there is only one name, leave it unchanged
+                formatted_name = name
+
+            directors.append(formatted_name)
 
     return ", ".join(directors)
 
