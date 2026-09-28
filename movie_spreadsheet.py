@@ -1,9 +1,12 @@
 # Simple program where I can input several movie titles and years and get an Excel Spreedsheet output of more detailed information
 # Need to input a txt file and output an excel file
 # Need to take in title and then year (which will be seperated by a space)
-# Once I get this data it needs to look through TMBD or Letterboxd and pull out the director, title, year, country, and genres
-# TMDB has a public API
-# If there's multiple in the same year just have it select the most viewed
+# Once I get this data it needs to look through TMBD pull out the director, title, year, country, and genres
+
+# TO DO: Make it so we split the genres all into their own column and have a checkbox of which they are checked off
+# Have the directors name be reversed so "Last Name, First Name"
+# Maybe have a GUI so I don't need to name the file movies
+# Make sure the column width is good
 
 import os
 import sys
@@ -273,7 +276,6 @@ def process_movies(movies):
         )
 
         try:
-
             # Search TMDB
             search_result = search_movie(
                 input_title,
@@ -285,9 +287,9 @@ def process_movies(movies):
                 print("    -> NOT FOUND")
 
                 rows.append({
+                    "Director": "",
                     "Title": input_title,
                     "Year": input_year,
-                    "Director": "",
                     "Country": "",
                     "Genres": ""
                 })
@@ -321,17 +323,17 @@ def process_movies(movies):
             genres = get_genres(details)
 
             rows.append({
+                "Director": director,
                 "Title": title,
                 "Year": year,
-                "Director": director,
                 "Country": countries,
                 "Genres": genres
             })
 
             print(
-                f"    -> {title} | "
+                f"    -> {director} | "
+                f"{title} | "
                 f"{year} | "
-                f"{director} | "
                 f"{countries} | "
                 f"{genres}"
             )
@@ -341,9 +343,9 @@ def process_movies(movies):
             print(f"    -> HTTP ERROR: {e}")
 
             rows.append({
+                "Director": "",
                 "Title": input_title,
                 "Year": input_year,
-                "Director": "",
                 "Country": "",
                 "Genres": ""
             })
@@ -353,9 +355,9 @@ def process_movies(movies):
             print(f"    -> REQUEST ERROR: {e}")
 
             rows.append({
+                "Director": "",
                 "Title": input_title,
                 "Year": input_year,
-                "Director": "",
                 "Country": "",
                 "Genres": ""
             })
@@ -365,9 +367,9 @@ def process_movies(movies):
             print(f"    -> ERROR: {e}")
 
             rows.append({
+                "Director": "",
                 "Title": input_title,
                 "Year": input_year,
-                "Director": "",
                 "Country": "",
                 "Genres": ""
             })
@@ -387,9 +389,9 @@ def save_to_excel(rows, filename):
     df = pd.DataFrame(
         rows,
         columns=[
+            "Director",
             "Title",
             "Year",
-            "Director",
             "Country",
             "Genres"
         ]
@@ -413,9 +415,9 @@ def save_to_excel(rows, filename):
         worksheet.freeze_panes = "A2"
 
         # Make columns readable
-        worksheet.column_dimensions["A"].width = 40
-        worksheet.column_dimensions["B"].width = 10
-        worksheet.column_dimensions["C"].width = 35
+        worksheet.column_dimensions["A"].width = 35
+        worksheet.column_dimensions["B"].width = 40
+        worksheet.column_dimensions["C"].width = 10
         worksheet.column_dimensions["D"].width = 30
         worksheet.column_dimensions["E"].width = 40
 
