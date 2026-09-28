@@ -3,6 +3,9 @@
 # Need to take in title and then year (which will be seperated by a space)
 # Once I get this data it needs to look through TMBD pull out the director, title, year, country, and genres
 
+#TO DO: Maybe add the letterboxd rating too
+# Maybe let you search a director and get a spreadsheet of all their movies in this format
+
 import os
 import sys
 import time
@@ -206,19 +209,35 @@ def read_movies(filename):
     Read movies from the TXT file.
 
     Expected format:
+
         Movie Title 2020
         Another Movie 1998
 
     The last 4 digits of each line are treated as the
     movie's release year. Everything before the year
     is treated as the movie title.
+
+    Duplicate movies with the same title and year
+    are automatically removed.
     """
 
     movies = []
 
-    with open(filename, "r", encoding="utf-8") as file:
+    # Keep track of movies we've already seen.
+    # Each entry will be:
+    # ("movie title", year)
+    seen_movies = set()
 
-        for line_number, line in enumerate(file, start=1):
+    with open(
+        filename,
+        "r",
+        encoding="utf-8"
+    ) as file:
+
+        for line_number, line in enumerate(
+            file,
+            start=1
+        ):
 
             line = line.strip()
 
@@ -232,44 +251,83 @@ def read_movies(filename):
 
             # Make sure the line has at least 4 characters
             if len(line) < 4:
+
                 print(
                     f"WARNING: Line {line_number} skipped "
                     f"(could not find a 4-digit year)"
                 )
+
                 continue
 
-            # Take the last 4 characters as the year
+            # Last 4 characters are the year
             year_text = line[-4:]
 
-            # Everything before the year is the movie title
+            # Everything before the year is the title
             title = line[:-4].strip()
 
-            # Make sure the last 4 characters are actually numbers
+            # Check that the year is numeric
             if not year_text.isdigit():
+
                 print(
                     f"WARNING: Line {line_number} skipped "
-                    f"(last 4 characters are not a year: {year_text})"
+                    f"(last 4 characters are not a year: "
+                    f"{year_text})"
                 )
+
                 continue
 
             year = int(year_text)
 
-            # Basic validation for a movie release year
+            # Basic year validation
             if year < 1800 or year > 2100:
+
                 print(
                     f"WARNING: Line {line_number} skipped "
                     f"(invalid year: {year})"
                 )
+
                 continue
 
-            # Make sure there is a title
+            # Make sure a title exists
             if not title:
+
                 print(
                     f"WARNING: Line {line_number} skipped "
                     f"(movie title is missing)"
                 )
+
                 continue
 
+            # ------------------------------------------------
+            # CHECK FOR DUPLICATES
+            # ------------------------------------------------
+
+            # Normalize the title so that these are considered
+            # the same movie:
+            #
+            # The Godfather 1972
+            # the godfather 1972
+            
+            normalized_title = title.lower().strip()
+
+            movie_key = (
+                normalized_title,
+                year
+            )
+
+            if movie_key in seen_movies:
+
+                print(
+                    f"Duplicate skipped: "
+                    f"{title} ({year})"
+                )
+
+                continue
+
+            # Add movie to our set of seen movies
+            seen_movies.add(movie_key)
+
+            # Add movie to the list
             movies.append({
                 "input_title": title,
                 "input_year": year
