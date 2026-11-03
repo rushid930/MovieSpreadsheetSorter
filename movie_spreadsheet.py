@@ -1,10 +1,13 @@
 # Simple program where I can input several movie titles and years and get an Excel Spreedsheet output of more detailed information
 
-#TO DO: Maybe let you search a director and get a spreadsheet of all their movies in this format
+# TO DO: Maybe let you search a director and get a spreadsheet of all their movies in this format
 # Maybe add a GUI so I can just upload a file instead of having something named movies.txt
 # I think maybe instead of country we orient it around spoken language
+# Make it so year isn't required
+# If there is more than one result for said title we will have the user be prompted with all options and some details so they can make a determination
 
 import os
+import re
 import sys
 import time
 import requests
@@ -17,43 +20,39 @@ load_dotenv()
 # CONFIGURATION
 # ============================================================
 
-# Put your TMDB API Read Access Token here, or set it as
-# an environment variable called TMDB_TOKEN.
+# Put your TMDB API Read Access Token here, or set it as an environment variable called TMDB_TOKEN.
 TMDB_TOKEN = os.getenv("TMDB_TOKEN")
 
 BASE_URL = "https://api.themoviedb.org/3"
 
-# Files
 INPUT_FILE = "movies.txt"
 OUTPUT_FILE = "movies.xlsx"
 
-# Language used for TMDB results
 LANGUAGE = "en-US"
 
-# ============================================================
-# TMDB API
-# ============================================================
+MAX_RESULTS = 5
 
 HEADERS = {
     "Authorization": f"Bearer {TMDB_TOKEN}",
     "accept": "application/json"
 }
 
-def search_movie(title, year):
+def search_movie(title, year=None):
     """
     Search TMDB for a movie using its title and release year.
 
     Returns the best matching TMDB movie result, or None.
     """
-
     url = f"{BASE_URL}/search/movie"
 
     params = {
         "query": title,
-        "year": year,
         "language": LANGUAGE,
         "include_adult": "false"
     }
+
+    if year is not None:
+        params["year"] = year
 
     response = requests.get(
         url,
@@ -95,7 +94,6 @@ def get_movie_details(movie_id):
     """
     Get detailed movie information and credits in one request.
     """
-
     url = f"{BASE_URL}/movie/{movie_id}"
 
     params = {
@@ -114,7 +112,6 @@ def get_movie_details(movie_id):
 
     return response.json()
 
-
 # ============================================================
 # DIRECTOR
 # ============================================================
@@ -129,20 +126,17 @@ def get_director(details):
     To:
         Nolan, Christopher
     """
-
     crew = details.get("credits", {}).get("crew", [])
 
     directors = []
 
     for person in crew:
         if person.get("job") == "Director":
-
             name = person.get("name", "").strip()
 
             if not name:
                 continue
 
-            # Split the name into individual parts
             name_parts = name.split()
 
             if len(name_parts) >= 2:
@@ -159,7 +153,6 @@ def get_director(details):
 
     return ", ".join(directors)
 
-
 # ============================================================
 # COUNTRY
 # ============================================================
@@ -168,7 +161,6 @@ def get_countries(details):
     """
     Extract production countries.
     """
-
     countries = details.get("production_countries", [])
 
     return ", ".join(
@@ -176,7 +168,6 @@ def get_countries(details):
         for country in countries
         if country.get("name")
     )
-
 
 # ============================================================
 # GENRES
@@ -198,7 +189,6 @@ def get_genres(details):
         if genre.get("name")
     ]
 
-
 # ============================================================
 # READ TXT FILE
 # ============================================================
@@ -208,23 +198,19 @@ def read_movies(filename):
     Read movies from the TXT file.
 
     Expected format:
-
         Movie Title 2020
         Another Movie 1998
 
-    The last 4 digits of each line are treated as the
-    movie's release year. Everything before the year
-    is treated as the movie title.
+    The last 4 digits are treated as the movie's release year.
+    Everything before the year is treated as the movie title.
+    Year is not required so these rule are not a factor if there are not 4 digits at the end.
 
     Duplicate movies with the same title and year
     are automatically removed.
     """
-
     movies = []
-
     # Keep track of movies we've already seen.
-    # Each entry will be:
-    # ("movie title", year)
+    # Each entry will be: ("movie title", year)
     seen_movies = set()
 
     with open(
@@ -232,81 +218,40 @@ def read_movies(filename):
         "r",
         encoding="utf-8"
     ) as file:
-
         for line_number, line in enumerate(
             file,
             start=1
         ):
-
             line = line.strip()
 
-            # Ignore empty lines
-            if not line:
+            # Ignore empty lines and comments
+            if not line or line.startswith("#"):
                 continue
 
-            # Ignore comments
-            if line.startswith("#"):
-                continue
+            # Default: No year provided:
+            title = line
+            year = None
 
-            # Make sure the line has at least 4 characters
-            if len(line) < 4:
+            # Check whether the line ends in a 4-digit year
+            match = re.match(r"^(.*?)\s+(\d{4})$", line)
 
-                print(
-                    f"WARNING: Line {line_number} skipped "
-                    f"(could not find a 4-digit year)"
-                )
+            if match:
+                possible_title = match.group(1).strip()
+                possible_year = int(match.group(2))
 
-                continue
+                if 1800 <= possible_year <= 2100:
+                    title = possible_title
+                    year = possible_year
 
-            # Last 4 characters are the year
-            year_text = line[-4:]
-
-            # Everything before the year is the title
-            title = line[:-4].strip()
-
-            # Check that the year is numeric
-            if not year_text.isdigit():
-
-                print(
-                    f"WARNING: Line {line_number} skipped "
-                    f"(last 4 characters are not a year: "
-                    f"{year_text})"
-                )
-
-                continue
-
-            year = int(year_text)
-
-            # Basic year validation
-            if year < 1800 or year > 2100:
-
-                print(
-                    f"WARNING: Line {line_number} skipped "
-                    f"(invalid year: {year})"
-                )
-
-                continue
-
-            # Make sure a title exists
             if not title:
-
                 print(
                     f"WARNING: Line {line_number} skipped "
-                    f"(movie title is missing)"
+                    "(movie title is missing)"
                 )
 
                 continue
 
-            # ------------------------------------------------
-            # CHECK FOR DUPLICATES
-            # ------------------------------------------------
-
-            # Normalize the title so that these are considered
-            # the same movie:
-            #
-            # The Godfather 1972
-            # the godfather 1972
-            
+            # Check for duplicates
             normalized_title = title.lower().strip()
 
             movie_key = (
@@ -315,25 +260,107 @@ def read_movies(filename):
             )
 
             if movie_key in seen_movies:
+                year_display = f" ({year})" if year else ""
 
                 print(
                     f"Duplicate skipped: "
-                    f"{title} ({year})"
+                    f"{title}{year_display}"
                 )
 
                 continue
 
-            # Add movie to our set of seen movies
             seen_movies.add(movie_key)
 
-            # Add movie to the list
             movies.append({
                 "input_title": title,
                 "input_year": year
             })
 
-    return movies
+            # # Make sure the line has at least 4 characters
+            # if len(line) < 4:
 
+            #     print(
+            #         f"WARNING: Line {line_number} skipped "
+            #         f"(could not find a 4-digit year)"
+            #     )
+
+            #     continue
+
+            # # Last 4 characters are the year
+            # year_text = line[-4:]
+
+            # # Everything before the year is the title
+            # title = line[:-4].strip()
+
+            # # Check that the year is numeric
+            # if not year_text.isdigit():
+
+            #     print(
+            #         f"WARNING: Line {line_number} skipped "
+            #         f"(last 4 characters are not a year: "
+            #         f"{year_text})"
+            #     )
+
+            #     continue
+
+            # year = int(year_text)
+
+            # # Basic year validation
+            # if year < 1800 or year > 2100:
+
+            #     print(
+            #         f"WARNING: Line {line_number} skipped "
+            #         f"(invalid year: {year})"
+            #     )
+
+            #     continue
+
+            # # Make sure a title exists
+            # if not title:
+
+            #     print(
+            #         f"WARNING: Line {line_number} skipped "
+            #         f"(movie title is missing)"
+            #     )
+
+            #     continue
+
+            # # ------------------------------------------------
+            # # CHECK FOR DUPLICATES
+            # # ------------------------------------------------
+
+            # # Normalize the title so that these are considered
+            # # the same movie:
+            # #
+            # # The Godfather 1972
+            # # the godfather 1972
+            
+            # normalized_title = title.lower().strip()
+
+            # movie_key = (
+            #     normalized_title,
+            #     year
+            # )
+
+            # if movie_key in seen_movies:
+
+            #     print(
+            #         f"Duplicate skipped: "
+            #         f"{title} ({year})"
+            #     )
+
+            #     continue
+
+            # # Add movie to our set of seen movies
+            # seen_movies.add(movie_key)
+
+            # # Add movie to the list
+            # movies.append({
+            #     "input_title": title,
+            #     "input_year": year
+            # })
+
+    return movies
 
 # ============================================================
 # PROCESS MOVIES
