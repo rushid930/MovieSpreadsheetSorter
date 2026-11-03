@@ -506,9 +506,7 @@ def select_movie(title, results):
 # ============================================================
 
 def process_movies(movies):
-
     rows = []
-
     # Keep track of every genre encountered.
     # A set prevents duplicates, while the list preserves
     # the order in which genres were first encountered.
@@ -518,13 +516,18 @@ def process_movies(movies):
     total = len(movies)
 
     for index, movie in enumerate(movies, start=1):
-
         input_title = movie["input_title"]
         input_year = movie["input_year"]
 
+        year_display = (
+            f" ({input_year})"
+            if input_year is not None
+            else ""
+        )
+
         print(
-            f"[{index}/{total}] Searching: "
-            f"{input_title} ({input_year})"
+            f"\n[{index}/{total}] "
+            f"Searching: {input_title}{year_display}"
         )
 
         try:
@@ -535,7 +538,6 @@ def process_movies(movies):
             )
 
             if search_result is None:
-
                 print("    -> NOT FOUND")
 
                 rows.append({
@@ -549,10 +551,14 @@ def process_movies(movies):
 
                 continue
 
-            movie_id = search_result["id"]
+            # Let the user select the correct movie
+            details = select_movie(
+                input_title,
+                search_result
+            )
 
-            # Retrieve complete details
-            details = get_movie_details(movie_id)
+            if details is None:
+                continue
 
             # Use the actual TMDB title/year
             title = details.get(
@@ -577,7 +583,6 @@ def process_movies(movies):
 
             # Add any newly encountered genres
             for genre in genres:
-
                 if genre not in genre_set:
                     genre_set.add(genre)
                     all_genres.append(genre)
@@ -600,7 +605,6 @@ def process_movies(movies):
             )
 
         except requests.exceptions.HTTPError as e:
-
             print(f"    -> HTTP ERROR: {e}")
 
             rows.append({
@@ -613,7 +617,6 @@ def process_movies(movies):
             })
 
         except requests.exceptions.RequestException as e:
-
             print(f"    -> REQUEST ERROR: {e}")
 
             rows.append({
@@ -626,7 +629,6 @@ def process_movies(movies):
             })
 
         except Exception as e:
-
             print(f"    -> ERROR: {e}")
 
             rows.append({
