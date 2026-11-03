@@ -363,6 +363,145 @@ def read_movies(filename):
     return movies
 
 # ============================================================
+# DISPLAY SEARCH RESULTS
+# ============================================================
+
+def select_movie(title, results):
+    """
+    Display matching movies and allow the user
+    to select the correct one.
+
+    Retrieves director information for each candidate.
+
+    Returns:
+        Selected movie details, or None if skipped.
+    """
+
+    if not results:
+        return None
+
+    # Limit the number of results displayed
+    results = results[:MAX_RESULTS]
+
+    print("\n" + "=" * 60)
+    print(f"Searching: {title}")
+    print("=" * 60)
+
+    # Retrieve details for every candidate
+    candidates = []
+
+    for movie in results:
+
+        try:
+
+            details = get_movie_details(movie["id"])
+
+            release_date = details.get("release_date", "")
+
+            year = release_date[:4] if release_date else "Unknown"
+
+            director = get_director(details)
+
+            language = details.get(
+                "original_language",
+                "Unknown"
+            )
+
+            overview = details.get(
+                "overview",
+                "No overview available."
+            )
+
+            candidates.append({
+                "movie": movie,
+                "details": details,
+                "year": year,
+                "director": director or "Unknown",
+                "language": language,
+                "overview": overview
+            })
+
+            time.sleep(0.15)
+
+        except requests.exceptions.RequestException as e:
+
+            print(f"Could not retrieve candidate details: {e}")
+
+    if not candidates:
+        return None
+
+    # If there is only one result, select automatically
+    if len(candidates) == 1:
+
+        candidate = candidates[0]
+
+        print("\nOnly one result found:")
+        print(
+            f"{candidate['movie']['title']} "
+            f"({candidate['year']})"
+        )
+
+        return candidate["details"]
+
+    # Display multiple results
+    print("\nMultiple matches found:\n")
+
+    for index, candidate in enumerate(candidates, start=1):
+
+        movie = candidate["movie"]
+
+        print(
+            f"[{index}] {movie.get('title', 'Unknown')} "
+            f"({candidate['year']})"
+        )
+
+        print(f"    Director: {candidate['director']}")
+        print(f"    Language: {candidate['language']}")
+
+        overview = candidate["overview"]
+
+        # Shorten overview for readability
+        if len(overview) > 180:
+            overview = overview[:180] + "..."
+
+        print(f"    Overview: {overview}")
+        print()
+
+    # Ask user to select a movie
+    while True:
+
+        choice = input(
+            "Enter the number of the movie you want "
+            "(or 0 to skip): "
+        ).strip()
+
+        if not choice.isdigit():
+            print("Please enter a valid number.")
+            continue
+
+        choice = int(choice)
+
+        if choice == 0:
+
+            print("Movie skipped.")
+
+            return None
+
+        if 1 <= choice <= len(candidates):
+
+            selected = candidates[choice - 1]
+
+            print(
+                f"\nSelected: "
+                f"{selected['movie']['title']} "
+                f"({selected['year']})"
+            )
+
+            return selected["details"]
+
+        print("Invalid selection. Try again.")
+
+# ============================================================
 # PROCESS MOVIES
 # ============================================================
 
