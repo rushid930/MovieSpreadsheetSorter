@@ -805,34 +805,14 @@ def save_to_excel(rows, all_genres, filename):
     # COLUMN WIDTHS
     # --------------------------------------------------------
 
-    worksheet.set_column(
-        "A:A",
-        35
-    )
-
-    worksheet.set_column(
-        "B:B",
-        40
-    )
-
-    worksheet.set_column(
-        "C:C",
-        10
-    )
-
-    worksheet.set_column(
-        "D:D",
-        30
-    )
-
-    worksheet.set_column(
-        "E:E",
-        40
-    )
+    worksheet.set_column("A:A", 35)
+    worksheet.set_column("B:B", 40)
+    worksheet.set_column("C:C", 10)
+    worksheet.set_column("D:D", 30)
+    worksheet.set_column("E:E", 40)
 
     # Genre columns
     if all_genres:
-
         worksheet.set_column(
             genre_start_col,
             genre_start_col + len(all_genres) - 1,
@@ -850,7 +830,6 @@ def save_to_excel(rows, all_genres, filename):
     last_col = genre_start_col + len(all_genres) - 1
 
     if last_col >= 0:
-
         worksheet.autofilter(
             0,
             0,
@@ -869,33 +848,18 @@ def save_to_excel(rows, all_genres, filename):
 # ============================================================
 
 def main():
-
     # Check API token
-    if (
-        not TMDB_TOKEN
-        or TMDB_TOKEN == "YOUR_TMDB_BEARER_TOKEN"
-    ):
+    if not TMDB_TOKEN:
         print(
             "ERROR: Please enter your TMDB API Read Access Token."
-        )
-        print(
-            "Either edit TMDB_TOKEN in this script or set "
-            "the TMDB_TOKEN environment variable."
         )
         sys.exit(1)
 
     # Check input file
     if not os.path.exists(INPUT_FILE):
-
         print(
             f"ERROR: Could not find '{INPUT_FILE}'."
         )
-
-        print(
-            "Create a TXT file with one movie per line, "
-            "using: Movie Title | Year"
-        )
-
         sys.exit(1)
 
     # Read movies
@@ -919,13 +883,9 @@ def main():
         OUTPUT_FILE
     )
 
-    print(
-        f"\nDone!"
-    )
-
-    print(
-        f"Excel file created: {OUTPUT_FILE}"
-    )
+    print(f"\nDone!")
+    print(f"Movies skipped/not found: {len(movies) - len(rows)}")
+    print(f"Excel file created: {OUTPUT_FILE}")
 
 
 if __name__ == "__main__":
