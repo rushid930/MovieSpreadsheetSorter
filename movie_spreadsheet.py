@@ -63,31 +63,38 @@ def search_movie(title, year=None):
 
     response.raise_for_status()
 
-    results = response.json().get("results", [])
+    data = response.json()
 
-    if not results:
-        return None
+    # Extract the list of matching movies
+    results = data.get("results", [])
 
-    # Prefer an exact title/year match where possible.
-    normalized_title = title.strip().lower()
+    return results
 
-    exact_matches = []
+    # results = response.json().get("results", [])
 
-    for movie in results:
-        movie_title = movie.get("title", "").strip().lower()
-        release_date = movie.get("release_date", "")
+    # if not results:
+    #     return None
 
-        if (
-            movie_title == normalized_title
-            and release_date.startswith(str(year))
-        ):
-            exact_matches.append(movie)
+    # # Prefer an exact title/year match where possible.
+    # normalized_title = title.strip().lower()
 
-    if exact_matches:
-        return exact_matches[0]
+    # exact_matches = []
 
-    # Otherwise use TMDB's first search result.
-    return results[0]
+    # for movie in results:
+    #     movie_title = movie.get("title", "").strip().lower()
+    #     release_date = movie.get("release_date", "")
+
+    #     if (
+    #         movie_title == normalized_title
+    #         and release_date.startswith(str(year))
+    #     ):
+    #         exact_matches.append(movie)
+
+    # if exact_matches:
+    #     return exact_matches[0]
+
+    # # Otherwise use TMDB's first search result.
+    # return results[0]
 
 
 def get_movie_details(movie_id):
