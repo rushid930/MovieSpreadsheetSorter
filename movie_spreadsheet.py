@@ -70,33 +70,6 @@ def search_movie(title, year=None):
 
     return results
 
-    # results = response.json().get("results", [])
-
-    # if not results:
-    #     return None
-
-    # # Prefer an exact title/year match where possible.
-    # normalized_title = title.strip().lower()
-
-    # exact_matches = []
-
-    # for movie in results:
-    #     movie_title = movie.get("title", "").strip().lower()
-    #     release_date = movie.get("release_date", "")
-
-    #     if (
-    #         movie_title == normalized_title
-    #         and release_date.startswith(str(year))
-    #     ):
-    #         exact_matches.append(movie)
-
-    # if exact_matches:
-    #     return exact_matches[0]
-
-    # # Otherwise use TMDB's first search result.
-    # return results[0]
-
-
 def get_movie_details(movie_id):
     """
     Get detailed movie information and credits in one request.
@@ -282,90 +255,6 @@ def read_movies(filename):
                 "input_title": title,
                 "input_year": year
             })
-
-            # # Make sure the line has at least 4 characters
-            # if len(line) < 4:
-
-            #     print(
-            #         f"WARNING: Line {line_number} skipped "
-            #         f"(could not find a 4-digit year)"
-            #     )
-
-            #     continue
-
-            # # Last 4 characters are the year
-            # year_text = line[-4:]
-
-            # # Everything before the year is the title
-            # title = line[:-4].strip()
-
-            # # Check that the year is numeric
-            # if not year_text.isdigit():
-
-            #     print(
-            #         f"WARNING: Line {line_number} skipped "
-            #         f"(last 4 characters are not a year: "
-            #         f"{year_text})"
-            #     )
-
-            #     continue
-
-            # year = int(year_text)
-
-            # # Basic year validation
-            # if year < 1800 or year > 2100:
-
-            #     print(
-            #         f"WARNING: Line {line_number} skipped "
-            #         f"(invalid year: {year})"
-            #     )
-
-            #     continue
-
-            # # Make sure a title exists
-            # if not title:
-
-            #     print(
-            #         f"WARNING: Line {line_number} skipped "
-            #         f"(movie title is missing)"
-            #     )
-
-            #     continue
-
-            # # ------------------------------------------------
-            # # CHECK FOR DUPLICATES
-            # # ------------------------------------------------
-
-            # # Normalize the title so that these are considered
-            # # the same movie:
-            # #
-            # # The Godfather 1972
-            # # the godfather 1972
-            
-            # normalized_title = title.lower().strip()
-
-            # movie_key = (
-            #     normalized_title,
-            #     year
-            # )
-
-            # if movie_key in seen_movies:
-
-            #     print(
-            #         f"Duplicate skipped: "
-            #         f"{title} ({year})"
-            #     )
-
-            #     continue
-
-            # # Add movie to our set of seen movies
-            # seen_movies.add(movie_key)
-
-            # # Add movie to the list
-            # movies.append({
-            #     "input_title": title,
-            #     "input_year": year
-            # })
 
     return movies
 
@@ -900,7 +789,6 @@ def main():
     print(f"\nDone!")
     print(f"Movies skipped/not found: {len(movies) - len(rows)}")
     print(f"Excel file created: {OUTPUT_FILE}")
-
 
 if __name__ == "__main__":
     main()
