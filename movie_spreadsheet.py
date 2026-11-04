@@ -380,6 +380,12 @@ def select_movie(title, results):
     if not results:
         return None
 
+    if not isinstance(results, list):
+        raise TypeError(
+            f"Expected a list of search results, "
+            f"got {type(results)}"
+        )
+    
     # Limit the number of results displayed
     results = results[:MAX_RESULTS]
 
@@ -447,7 +453,6 @@ def select_movie(title, results):
     print("\nMultiple matches found:\n")
 
     for index, candidate in enumerate(candidates, start=1):
-
         movie = candidate["movie"]
 
         print(
@@ -469,7 +474,6 @@ def select_movie(title, results):
 
     # Ask user to select a movie
     while True:
-
         choice = input(
             "Enter the number of the movie you want "
             "(or 0 to skip): "
@@ -536,6 +540,9 @@ def process_movies(movies):
                 input_title,
                 input_year
             )
+
+            print("DEBUG - Search results type:", type(search_result))
+            print("DEBUG - Search results:", search_result)
 
             if search_result is None:
                 print("    -> NOT FOUND")
