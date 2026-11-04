@@ -1,10 +1,13 @@
 # Simple program where I can input several movie titles and years and get an Excel Spreedsheet output of more detailed information
 
-#TO DO: Maybe let you search a director and get a spreadsheet of all their movies in this format
+# TO DO: Maybe let you search a director and get a spreadsheet of all their movies in this format
 # Maybe add a GUI so I can just upload a file instead of having something named movies.txt
 # I think maybe instead of country we orient it around spoken language
+# Make it so year isn't required
+# If there is more than one result for said title we will have the user be prompted with all options and some details so they can make a determination
 
 import os
+import re
 import sys
 import time
 import requests
@@ -17,43 +20,39 @@ load_dotenv()
 # CONFIGURATION
 # ============================================================
 
-# Put your TMDB API Read Access Token here, or set it as
-# an environment variable called TMDB_TOKEN.
+# Put your TMDB API Read Access Token here, or set it as an environment variable called TMDB_TOKEN.
 TMDB_TOKEN = os.getenv("TMDB_TOKEN")
 
 BASE_URL = "https://api.themoviedb.org/3"
 
-# Files
 INPUT_FILE = "movies.txt"
 OUTPUT_FILE = "movies.xlsx"
 
-# Language used for TMDB results
 LANGUAGE = "en-US"
 
-# ============================================================
-# TMDB API
-# ============================================================
+MAX_RESULTS = 5
 
 HEADERS = {
     "Authorization": f"Bearer {TMDB_TOKEN}",
     "accept": "application/json"
 }
 
-def search_movie(title, year):
+def search_movie(title, year=None):
     """
     Search TMDB for a movie using its title and release year.
 
     Returns the best matching TMDB movie result, or None.
     """
-
     url = f"{BASE_URL}/search/movie"
 
     params = {
         "query": title,
-        "year": year,
         "language": LANGUAGE,
         "include_adult": "false"
     }
+
+    if year is not None:
+        params["year"] = year
 
     response = requests.get(
         url,
@@ -64,38 +63,17 @@ def search_movie(title, year):
 
     response.raise_for_status()
 
-    results = response.json().get("results", [])
+    data = response.json()
 
-    if not results:
-        return None
+    # Extract the list of matching movies
+    results = data.get("results", [])
 
-    # Prefer an exact title/year match where possible.
-    normalized_title = title.strip().lower()
-
-    exact_matches = []
-
-    for movie in results:
-        movie_title = movie.get("title", "").strip().lower()
-        release_date = movie.get("release_date", "")
-
-        if (
-            movie_title == normalized_title
-            and release_date.startswith(str(year))
-        ):
-            exact_matches.append(movie)
-
-    if exact_matches:
-        return exact_matches[0]
-
-    # Otherwise use TMDB's first search result.
-    return results[0]
-
+    return results
 
 def get_movie_details(movie_id):
     """
     Get detailed movie information and credits in one request.
     """
-
     url = f"{BASE_URL}/movie/{movie_id}"
 
     params = {
@@ -114,7 +92,6 @@ def get_movie_details(movie_id):
 
     return response.json()
 
-
 # ============================================================
 # DIRECTOR
 # ============================================================
@@ -129,20 +106,17 @@ def get_director(details):
     To:
         Nolan, Christopher
     """
-
     crew = details.get("credits", {}).get("crew", [])
 
     directors = []
 
     for person in crew:
         if person.get("job") == "Director":
-
             name = person.get("name", "").strip()
 
             if not name:
                 continue
 
-            # Split the name into individual parts
             name_parts = name.split()
 
             if len(name_parts) >= 2:
@@ -159,7 +133,6 @@ def get_director(details):
 
     return ", ".join(directors)
 
-
 # ============================================================
 # COUNTRY
 # ============================================================
@@ -168,7 +141,6 @@ def get_countries(details):
     """
     Extract production countries.
     """
-
     countries = details.get("production_countries", [])
 
     return ", ".join(
@@ -176,7 +148,6 @@ def get_countries(details):
         for country in countries
         if country.get("name")
     )
-
 
 # ============================================================
 # GENRES
@@ -198,7 +169,6 @@ def get_genres(details):
         if genre.get("name")
     ]
 
-
 # ============================================================
 # READ TXT FILE
 # ============================================================
@@ -208,23 +178,19 @@ def read_movies(filename):
     Read movies from the TXT file.
 
     Expected format:
-
         Movie Title 2020
         Another Movie 1998
 
-    The last 4 digits of each line are treated as the
-    movie's release year. Everything before the year
-    is treated as the movie title.
+    The last 4 digits are treated as the movie's release year.
+    Everything before the year is treated as the movie title.
+    Year is not required so these rule are not a factor if there are not 4 digits at the end.
 
     Duplicate movies with the same title and year
     are automatically removed.
     """
-
     movies = []
-
     # Keep track of movies we've already seen.
-    # Each entry will be:
-    # ("movie title", year)
+    # Each entry will be: ("movie title", year)
     seen_movies = set()
 
     with open(
@@ -232,81 +198,40 @@ def read_movies(filename):
         "r",
         encoding="utf-8"
     ) as file:
-
         for line_number, line in enumerate(
             file,
             start=1
         ):
-
             line = line.strip()
 
-            # Ignore empty lines
-            if not line:
+            # Ignore empty lines and comments
+            if not line or line.startswith("#"):
                 continue
 
-            # Ignore comments
-            if line.startswith("#"):
-                continue
+            # Default: No year provided:
+            title = line
+            year = None
 
-            # Make sure the line has at least 4 characters
-            if len(line) < 4:
+            # Check whether the line ends in a 4-digit year
+            match = re.match(r"^(.*?)\s+(\d{4})$", line)
 
-                print(
-                    f"WARNING: Line {line_number} skipped "
-                    f"(could not find a 4-digit year)"
-                )
+            if match:
+                possible_title = match.group(1).strip()
+                possible_year = int(match.group(2))
 
-                continue
+                if 1800 <= possible_year <= 2100:
+                    title = possible_title
+                    year = possible_year
 
-            # Last 4 characters are the year
-            year_text = line[-4:]
-
-            # Everything before the year is the title
-            title = line[:-4].strip()
-
-            # Check that the year is numeric
-            if not year_text.isdigit():
-
-                print(
-                    f"WARNING: Line {line_number} skipped "
-                    f"(last 4 characters are not a year: "
-                    f"{year_text})"
-                )
-
-                continue
-
-            year = int(year_text)
-
-            # Basic year validation
-            if year < 1800 or year > 2100:
-
-                print(
-                    f"WARNING: Line {line_number} skipped "
-                    f"(invalid year: {year})"
-                )
-
-                continue
-
-            # Make sure a title exists
             if not title:
-
                 print(
                     f"WARNING: Line {line_number} skipped "
-                    f"(movie title is missing)"
+                    "(movie title is missing)"
                 )
 
                 continue
 
-            # ------------------------------------------------
-            # CHECK FOR DUPLICATES
-            # ------------------------------------------------
-
-            # Normalize the title so that these are considered
-            # the same movie:
-            #
-            # The Godfather 1972
-            # the godfather 1972
-            
+            # Check for duplicates
             normalized_title = title.lower().strip()
 
             movie_key = (
@@ -315,18 +240,17 @@ def read_movies(filename):
             )
 
             if movie_key in seen_movies:
+                year_display = f" ({year})" if year else ""
 
                 print(
                     f"Duplicate skipped: "
-                    f"{title} ({year})"
+                    f"{title}{year_display}"
                 )
 
                 continue
 
-            # Add movie to our set of seen movies
             seen_movies.add(movie_key)
 
-            # Add movie to the list
             movies.append({
                 "input_title": title,
                 "input_year": year
@@ -334,15 +258,155 @@ def read_movies(filename):
 
     return movies
 
+# ============================================================
+# DISPLAY SEARCH RESULTS
+# ============================================================
+
+def select_movie(title, results):
+    """
+    Display matching movies and allow the user
+    to select the correct one.
+
+    Retrieves director information for each candidate.
+
+    Returns:
+        Selected movie details, or None if skipped.
+    """
+
+    if not results:
+        return None
+
+    if not isinstance(results, list):
+        raise TypeError(
+            f"Expected a list of search results, "
+            f"got {type(results)}"
+        )
+    
+    # Limit the number of results displayed
+    results = results[:MAX_RESULTS]
+
+    print("\n" + "=" * 60)
+    print(f"Searching: {title}")
+    print("=" * 60)
+
+    # Retrieve details for every candidate
+    candidates = []
+
+    for movie in results:
+
+        try:
+
+            details = get_movie_details(movie["id"])
+
+            release_date = details.get("release_date", "")
+
+            year = release_date[:4] if release_date else "Unknown"
+
+            director = get_director(details)
+
+            language = details.get(
+                "original_language",
+                "Unknown"
+            )
+
+            overview = details.get(
+                "overview",
+                "No overview available."
+            )
+
+            candidates.append({
+                "movie": movie,
+                "details": details,
+                "year": year,
+                "director": director or "Unknown",
+                "language": language,
+                "overview": overview
+            })
+
+            time.sleep(0.15)
+
+        except requests.exceptions.RequestException as e:
+
+            print(f"Could not retrieve candidate details: {e}")
+
+    if not candidates:
+        return None
+
+    # If there is only one result, select automatically
+    if len(candidates) == 1:
+
+        candidate = candidates[0]
+
+        print("\nOnly one result found:")
+        print(
+            f"{candidate['movie']['title']} "
+            f"({candidate['year']})"
+        )
+
+        return candidate["details"]
+
+    # Display multiple results
+    print("\nMultiple matches found:\n")
+
+    for index, candidate in enumerate(candidates, start=1):
+        movie = candidate["movie"]
+
+        print(
+            f"[{index}] {movie.get('title', 'Unknown')} "
+            f"({candidate['year']})"
+        )
+
+        print(f"    Director: {candidate['director']}")
+        print(f"    Language: {candidate['language']}")
+
+        overview = candidate["overview"]
+
+        # Shorten overview for readability
+        if len(overview) > 180:
+            overview = overview[:180] + "..."
+
+        print(f"    Overview: {overview}")
+        print()
+
+    # Ask user to select a movie
+    while True:
+        choice = input(
+            "Enter the number of the movie you want "
+            "(or 0 to skip): "
+        ).strip()
+
+        if not choice.isdigit():
+            print("Please enter a valid number.")
+            continue
+
+        choice = int(choice)
+
+        if choice == 0:
+
+            print("Movie skipped.")
+
+            return None
+
+        if 1 <= choice <= len(candidates):
+
+            selected = candidates[choice - 1]
+
+            print(
+                f"\nSelected: "
+                f"{selected['movie']['title']} "
+                f"({selected['year']})"
+            )
+
+            return selected["details"]
+
+        print("Invalid selection. Try again.")
 
 # ============================================================
 # PROCESS MOVIES
 # ============================================================
 
 def process_movies(movies):
-
     rows = []
-
     # Keep track of every genre encountered.
     # A set prevents duplicates, while the list preserves
     # the order in which genres were first encountered.
@@ -352,13 +416,18 @@ def process_movies(movies):
     total = len(movies)
 
     for index, movie in enumerate(movies, start=1):
-
         input_title = movie["input_title"]
         input_year = movie["input_year"]
 
+        year_display = (
+            f" ({input_year})"
+            if input_year is not None
+            else ""
+        )
+
         print(
-            f"[{index}/{total}] Searching: "
-            f"{input_title} ({input_year})"
+            f"\n[{index}/{total}] "
+            f"Searching: {input_title}{year_display}"
         )
 
         try:
@@ -368,8 +437,10 @@ def process_movies(movies):
                 input_year
             )
 
-            if search_result is None:
+            print("DEBUG - Search results type:", type(search_result))
+            print("DEBUG - Search results:", search_result)
 
+            if search_result is None:
                 print("    -> NOT FOUND")
 
                 rows.append({
@@ -383,10 +454,14 @@ def process_movies(movies):
 
                 continue
 
-            movie_id = search_result["id"]
+            # Let the user select the correct movie
+            details = select_movie(
+                input_title,
+                search_result
+            )
 
-            # Retrieve complete details
-            details = get_movie_details(movie_id)
+            if details is None:
+                continue
 
             # Use the actual TMDB title/year
             title = details.get(
@@ -411,7 +486,6 @@ def process_movies(movies):
 
             # Add any newly encountered genres
             for genre in genres:
-
                 if genre not in genre_set:
                     genre_set.add(genre)
                     all_genres.append(genre)
@@ -434,7 +508,6 @@ def process_movies(movies):
             )
 
         except requests.exceptions.HTTPError as e:
-
             print(f"    -> HTTP ERROR: {e}")
 
             rows.append({
@@ -447,7 +520,6 @@ def process_movies(movies):
             })
 
         except requests.exceptions.RequestException as e:
-
             print(f"    -> REQUEST ERROR: {e}")
 
             rows.append({
@@ -460,7 +532,6 @@ def process_movies(movies):
             })
 
         except Exception as e:
-
             print(f"    -> ERROR: {e}")
 
             rows.append({
@@ -637,34 +708,14 @@ def save_to_excel(rows, all_genres, filename):
     # COLUMN WIDTHS
     # --------------------------------------------------------
 
-    worksheet.set_column(
-        "A:A",
-        35
-    )
-
-    worksheet.set_column(
-        "B:B",
-        40
-    )
-
-    worksheet.set_column(
-        "C:C",
-        10
-    )
-
-    worksheet.set_column(
-        "D:D",
-        30
-    )
-
-    worksheet.set_column(
-        "E:E",
-        40
-    )
+    worksheet.set_column("A:A", 35)
+    worksheet.set_column("B:B", 40)
+    worksheet.set_column("C:C", 10)
+    worksheet.set_column("D:D", 30)
+    worksheet.set_column("E:E", 40)
 
     # Genre columns
     if all_genres:
-
         worksheet.set_column(
             genre_start_col,
             genre_start_col + len(all_genres) - 1,
@@ -682,7 +733,6 @@ def save_to_excel(rows, all_genres, filename):
     last_col = genre_start_col + len(all_genres) - 1
 
     if last_col >= 0:
-
         worksheet.autofilter(
             0,
             0,
@@ -701,33 +751,18 @@ def save_to_excel(rows, all_genres, filename):
 # ============================================================
 
 def main():
-
     # Check API token
-    if (
-        not TMDB_TOKEN
-        or TMDB_TOKEN == "YOUR_TMDB_BEARER_TOKEN"
-    ):
+    if not TMDB_TOKEN:
         print(
             "ERROR: Please enter your TMDB API Read Access Token."
-        )
-        print(
-            "Either edit TMDB_TOKEN in this script or set "
-            "the TMDB_TOKEN environment variable."
         )
         sys.exit(1)
 
     # Check input file
     if not os.path.exists(INPUT_FILE):
-
         print(
             f"ERROR: Could not find '{INPUT_FILE}'."
         )
-
-        print(
-            "Create a TXT file with one movie per line, "
-            "using: Movie Title | Year"
-        )
-
         sys.exit(1)
 
     # Read movies
@@ -751,14 +786,9 @@ def main():
         OUTPUT_FILE
     )
 
-    print(
-        f"\nDone!"
-    )
-
-    print(
-        f"Excel file created: {OUTPUT_FILE}"
-    )
-
+    print(f"\nDone!")
+    print(f"Movies skipped/not found: {len(movies) - len(rows)}")
+    print(f"Excel file created: {OUTPUT_FILE}")
 
 if __name__ == "__main__":
     main()
