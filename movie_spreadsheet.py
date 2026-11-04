@@ -1,10 +1,7 @@
 # Simple program where I can input several movie titles and years and get an Excel Spreedsheet output of more detailed information
 
 # TO DO: Maybe let you search a director and get a spreadsheet of all their movies in this format
-# Maybe add a GUI so I can just upload a file instead of having something named movies.txt
 # I think maybe instead of country we orient it around spoken language
-# Make it so year isn't required
-# If there is more than one result for said title we will have the user be prompted with all options and some details so they can make a determination
 
 import os
 import re
